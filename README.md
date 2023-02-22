@@ -70,7 +70,7 @@ If you find our paper or code helpful, please consider citing our paper:
 ```
 @article{ratner2022parallel,
   title={Parallel Context Windows Improve In-Context Learning of Large Language Models},
-  author={Ratner, Nir and Levine, Yoav and Belinkov, Yonatan and Ram, Ori and Magar,Inbal and Abend, Omri and Karpas, Ehud and Shashua, Amnon and Leyton-Brown, Kevin and Shoham, Yoav},
+  author={Ratner, Nir and Levine, Yoav and Belinkov, Yonatan and Ram, Ori and Magar, Inbal and Abend, Omri and Karpas, Ehud and Shashua, Amnon and Leyton-Brown, Kevin and Shoham, Yoav},
   journal={arXiv preprint arXiv:2212.10947},
   year={2022}
 }
