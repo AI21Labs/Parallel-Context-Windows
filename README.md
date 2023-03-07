@@ -19,7 +19,6 @@ To reproduce similiar results shown in the appendix for GPT2-XL for a specific d
 python run_evaluation.py \
 --dataset sst2 \
 --model gpt2-xl \
---n-windows 1 \
 --n-windows 3 \
 --subsample-test-set 250 \
 --n-runs 30 \
