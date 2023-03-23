@@ -38,10 +38,17 @@ See --help for further instructions.
 In the evaluation code, only classification tasks are performed.
 The code snippet below shows how PCW can be used both for classification and generation:
 ```python
+from transformers import AutoConfig
 from modeling_gpt2_with_pcw import RestrictiveTokensLogitsProcessor, GPT2LMHeadWithPCWModel
 import numpy as np
 
-model = GPT2LMHeadWithPCWModel.from_pretrained('gpt2-large')
+model_name = 'gpt2-large'
+num_windows = 2
+context_window_size = 2048
+
+config = AutoConfig.from_pretrained(model_name, n_positions=context_window_size * num_windows)
+model = GPT2LMHeadWithPCWModel.from_pretrained(model_name, config=config, ignore_mismatched_sizes=True)
+
 # use PCW with few shot for classification example:
 labels = ['positive', 'negative']
 labels_input_ids = np.array(
@@ -55,6 +62,7 @@ output = model.pcw_generate(contexts=["Review: Great movie! Sentiment: positive\
                             temperature=0,
                             max_new_tokens=1)
 print(output.strip())
+
 # use PCW for generation:
 output = model.pcw_generate(contexts=["Review: Great movie!\n", "Review: Horrible film\n"],
                             task_text="Review:",
