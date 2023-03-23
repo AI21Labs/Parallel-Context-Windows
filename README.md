@@ -44,9 +44,9 @@ import numpy as np
 
 model_name = 'gpt2-large'
 num_windows = 2
-context_window_size = 2048
 
-config = AutoConfig.from_pretrained(model_name, n_positions=context_window_size * num_windows)
+config = AutoConfig.from_pretrained(model_name)
+config.n_positions = config.n_positions * num_windows
 model = GPT2LMHeadWithPCWModel.from_pretrained(model_name, config=config, ignore_mismatched_sizes=True)
 
 # use PCW with few shot for classification example:
