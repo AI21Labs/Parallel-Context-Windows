@@ -1,6 +1,6 @@
 # Parallel Context Windows (PCW)
 
-This repo contains the code for reproducing the classification experiments on GPT2 models from [AI21 Labs](https://www.ai21.com/)' paper [Parallel Context Windows Improve In-Context Learning of Large Language Models
+This repo contains the code for reproducing the classification experiments on GPT2 models from [AI21 Labs](https://www.ai21.com/)' paper [Parallel Parallel Context Windows for Large Language Models
 ](https://arxiv.org/abs/2212.10947).  
 The code was tested with python 3.10, with CPU and single GPU.
 
@@ -76,10 +76,12 @@ print(output)
 
 If you find our paper or code helpful, please consider citing our paper:
 ```
-@article{ratner2022parallel,
-  title={Parallel Context Windows Improve In-Context Learning of Large Language Models},
-  author={Ratner, Nir and Levine, Yoav and Belinkov, Yonatan and Ram, Ori and Magar, Inbal and Abend, Omri and Karpas, Ehud and Shashua, Amnon and Leyton-Brown, Kevin and Shoham, Yoav},
-  journal={arXiv preprint arXiv:2212.10947},
-  year={2022}
+@misc{ratner2023parallel,
+      title={Parallel Context Windows for Large Language Models}, 
+      author={Nir Ratner and Yoav Levine and Yonatan Belinkov and Ori Ram and Inbal Magar and Omri Abend and Ehud Karpas and Amnon Shashua and Kevin Leyton-Brown and Yoav Shoham},
+      year={2023},
+      eprint={2212.10947},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
 }
 ```
