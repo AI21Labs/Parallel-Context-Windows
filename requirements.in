@@ -1,0 +1,8 @@
+numpy~=1.24.2
+transformers==4.28.1
+matplotlib
+pandas~=1.5.3
+datasets~=2.9.0
+tqdm
+accelerate==0.18.0
+sentencepiece==0.1.99

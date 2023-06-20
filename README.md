@@ -1,8 +1,8 @@
 # Parallel Context Windows (PCW)
 
-This repo contains the code for reproducing the classification experiments on GPT2 models from [AI21 Labs](https://www.ai21.com/)' paper [Parallel Parallel Context Windows for Large Language Models
+This repo contains the code for reproducing the classification experiments from [AI21 Labs](https://www.ai21.com/)' paper [Parallel Context Windows Improve In-Context Learning of Large Language Models
 ](https://arxiv.org/abs/2212.10947).  
-The code was tested with python 3.10, with CPU and single GPU.
+The code was tested with python 3.10, for CPU, GPU and multiple GPU runs. Currently, the code supports using GPT2 and LLaMa model families.
 
 ## Setup
 
@@ -14,7 +14,7 @@ To have a Pytorch version specific to your CUDA, [install](https://pytorch.org/)
 
 ## Evaluation
 Due to the fact that the paper's results were based on an earlier implementation of PCW and not [HuggingFace Transformers](https://huggingface.co/docs/transformers/index), the results produced using this code may differ slightly from those shown in the paper.
-To reproduce similiar results shown in the appendix for GPT2-XL for a specific dataset (for example SST2), simply run:
+To reproduce similar results shown in the appendix for GPT2-XL for a specific dataset (for example SST2), simply run:
 ```bash
 python run_evaluation.py \
 --dataset sst2 \
@@ -37,38 +37,34 @@ See --help for further instructions.
 ## PCW Usage examples
 In the evaluation code, only classification tasks are performed.
 The code snippet below shows how PCW can be used both for classification and generation:
+
 ```python
-from transformers import AutoConfig
-from modeling_gpt2_with_pcw import RestrictiveTokensLogitsProcessor, GPT2LMHeadWithPCWModel
 import numpy as np
 
-model_name = 'gpt2-large'
-num_windows = 2
+from model_loaders import load_pcw_wrapper
+from logits_processor import RestrictiveTokensLogitsProcessor
 
-config = AutoConfig.from_pretrained(model_name)
-config.n_positions = config.n_positions * num_windows
-model = GPT2LMHeadWithPCWModel.from_pretrained(model_name, config=config, ignore_mismatched_sizes=True)
+from utils import encode_labels
+
+wrapper = load_pcw_wrapper('gpt2-large', n_windows=2)
 
 # use PCW with few shot for classification example:
-labels = ['positive', 'negative']
-labels_input_ids = np.array(
-    [model.tokenizer.encode(f' {label.lstrip()}', add_special_tokens=False) for label in labels])
+labels_input_ids = np.array(encode_labels(wrapper.tokenizer, ['positive', 'negative']))
 # using RestrictiveTokensLogitsProcessor forces the output to be one of the labels:
-logit_processor = RestrictiveTokensLogitsProcessor(labels_input_ids, eos_token_id=model.tokenizer.eos_token_id)
-output = model.pcw_generate(contexts=["Review: Great movie! Sentiment: positive\n",
-                                      "Review: Horrible film Sentiment: negative\n"],
-                            task_text="Review: I liked it Sentiment:",
-                            restrictive_logit_preprocessor=logit_processor,
-                            temperature=0,
-                            max_new_tokens=1)
+logit_processor = RestrictiveTokensLogitsProcessor(labels_input_ids, eos_token_id=wrapper.tokenizer.eos_token_id)
+output = wrapper.pcw_generate(contexts=["Review: Great movie! Sentiment: positive\n",
+                                        "Review: Horrible film Sentiment: negative\n"],
+                              task_text="Review: I liked it Sentiment:",
+                              restrictive_logit_preprocessor=logit_processor,
+                              temperature=0,
+                              max_new_tokens=1)
 print(output.strip())
-
 # use PCW for generation:
-output = model.pcw_generate(contexts=["Review: Great movie!\n", "Review: Horrible film\n"],
-                            task_text="Review:",
-                            temperature=1,
-                            do_sample=True,
-                            max_new_tokens=16)
+output = wrapper.pcw_generate(contexts=["Review: Great movie!\n", "Review: Horrible film\n"],
+                              task_text="Review:",
+                              temperature=1,
+                              do_sample=True,
+                              max_new_tokens=16)
 print(output)
 ```
 
