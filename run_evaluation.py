@@ -3,31 +3,18 @@ import logging
 from typing import List, Optional
 
 import pandas as pd
-import torch
-from transformers import PreTrainedTokenizer, AutoConfig
+from transformers import PreTrainedTokenizerBase
 
 from datasets_loader import DATASET_NAMES2LOADERS
 from experiment_manager import ExperimentManager
-from modeling_gpt2_with_pcw import GPT2LMHeadWithPCWModel, GPT2_WINDOW_SIZE
+from model_loaders import load_pcw_wrapper
 from utils import get_max_n_shots, filter_extremely_long_samples, save_results
 
 _logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
-def get_inference_wrapper_and_tokenizer(model_name: str, n_windows: int, add_bos_token: bool) -> GPT2LMHeadWithPCWModel:
-    # we override n_positions to bi pass the model's context window size restriction (for gpt2, n_positions determines
-    # the causal attention mask matrix dimension). The correct position embeddings (i.e., gpt2's 1024 trained
-    # position embeddings) are re-inserted to the model in GPT2LMHeadWithPCWModel initialization.
-    config = AutoConfig.from_pretrained(model_name, n_positions=GPT2_WINDOW_SIZE * n_windows)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = GPT2LMHeadWithPCWModel.from_pretrained(model_name, config=config, ignore_mismatched_sizes=True,
-                                                   add_bos_token=add_bos_token)
-    model.to(device)
-    return model
-
-
-def get_dataset(dataset: str, tokenizer: PreTrainedTokenizer) -> (pd.DataFrame, pd.DataFrame, List):
+def get_dataset(dataset: str, tokenizer: PreTrainedTokenizerBase) -> (pd.DataFrame, pd.DataFrame, List):
     da = DATASET_NAMES2LOADERS[dataset]()
     # Filter extremely long samples from both train and test samples:
     _logger.info("filtering test set:")
@@ -37,10 +24,10 @@ def get_dataset(dataset: str, tokenizer: PreTrainedTokenizer) -> (pd.DataFrame, 
     return test_df, train_df, da.labels
 
 
-def run_pcw_experiment(dataset: str, model: str, subsample_test_set: int, output_dir: str,
+def run_pcw_experiment(dataset: str, model: str, cache_dir: str, subsample_test_set: int, output_dir: str,
                        n_windows: List[int], n_shots_per_window: Optional[int], n_runs: int,
-                       random_seed: int, add_bos_token: bool) -> None:
-    pcw_model = get_inference_wrapper_and_tokenizer(model, max(n_windows), add_bos_token)
+                       random_seed: int, right_indentation: bool) -> None:
+    pcw_model = load_pcw_wrapper(model, cache_dir, right_indentation, max(n_windows))
 
     test_df, train_df, labels = get_dataset(dataset, pcw_model.tokenizer)
 
@@ -64,11 +51,12 @@ if __name__ == '__main__':
                         help=f'Name of dataset (for example sst2).'
                              f' The supported datasets are: {DATASET_NAMES2LOADERS.keys()}')
     parser.add_argument('--model', dest='model', action='store', default='gpt2',
-                        help='HF model name to use, one of: [gpt2,gpt2-medium,gpt2-large,gpt2-xl]')
+                        help='HF model name to use, either gpt2 or LLaMa family models')
     parser.add_argument('--subsample-test-set', dest='subsample_test_set', action='store', required=False, type=int,
                         help='Size of test set to use to speed up eval. None means using all test set.')
     parser.add_argument('--output-dir', dest='output_dir', required=False, help="Directory for saving the results",
                         default='./temp', action='store', type=str)
+    parser.add_argument('--cache-dir', help="Hugging face cache dir", type=str, default=None, dest='cache_dir')
     parser.add_argument('--random-seed', dest='random_seed', required=False, default=42, action='store', type=int)
     parser.add_argument('--n-runs', dest='n_runs',
                         help="Number of times experiments are repeated for every number of windows", action='store',
@@ -77,9 +65,7 @@ if __name__ == '__main__':
                         action='append', type=int)
     parser.add_argument('--n-shots-per-window', dest='n_shots_per_window',
                         help="number of examples to fit in each window", type=int, default=None)
-    parser.add_argument('--add-bos-token', dest='add_bos_token',
-                        help="Add a single shared bos token for all of the windows", action='store_true', default=True)
-    parser.add_argument('--no-add-bos-token', dest='add_bos_token',
-                        help="Don't use any bos tokens", action='store_false')
+    parser.add_argument('--right-indentation', dest='right_indentation', help="ident all windows to the right",
+                        action='store_true', default=False)
     args = parser.parse_args()
     run_pcw_experiment(**vars(args))

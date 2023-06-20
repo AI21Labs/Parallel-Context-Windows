@@ -7,8 +7,7 @@ import pandas as pd
 from matplotlib import pyplot as plt
 from numpy import typing as npt
 from torch import distributed as dist
-
-from transformers import PreTrainedTokenizer
+from transformers import PreTrainedTokenizerBase, LlamaTokenizer
 
 from constants import TEXT_BETWEEN_SHOTS, N_TOKENS, PROMPTS
 
@@ -16,7 +15,7 @@ _logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
-def get_max_n_shots(train_df: pd.DataFrame, test_df: pd.DataFrame, tokenizer: PreTrainedTokenizer,
+def get_max_n_shots(train_df: pd.DataFrame, test_df: pd.DataFrame, tokenizer: PreTrainedTokenizerBase,
                     prompt_size: int) -> int:
     n_tokens_between_shots = n_tokens_in_prompt(tokenizer, TEXT_BETWEEN_SHOTS)
     shot_lengths = train_df[N_TOKENS] + n_tokens_between_shots
@@ -27,7 +26,7 @@ def get_max_n_shots(train_df: pd.DataFrame, test_df: pd.DataFrame, tokenizer: Pr
     return int(np.floor(max_possible_shots_length / prompt_length_percentile))
 
 
-def filter_extremely_long_samples(df: pd.DataFrame, tokenizer: PreTrainedTokenizer) -> pd.DataFrame:
+def filter_extremely_long_samples(df: pd.DataFrame, tokenizer: PreTrainedTokenizerBase) -> pd.DataFrame:
     df[N_TOKENS] = df[PROMPTS].map(lambda x: n_tokens_in_prompt(tokenizer, x))
     mask = df[N_TOKENS] <= df[N_TOKENS].quantile(0.99)
     _logger.info(f"filtered {sum(~mask)} from  dataset due to extreme length")
@@ -36,8 +35,8 @@ def filter_extremely_long_samples(df: pd.DataFrame, tokenizer: PreTrainedTokeniz
     return df
 
 
-def n_tokens_in_prompt(tokenizer: PreTrainedTokenizer, prompt: str) -> int:
-    return len(tokenizer.encode(prompt, add_special_tokens=False))
+def n_tokens_in_prompt(tokenizer: PreTrainedTokenizerBase, prompt: str, add_special_tokens=False) -> int:
+    return len(tokenizer.encode(prompt, add_special_tokens=add_special_tokens))
 
 
 def plot_results_graph(results, dataset_name, n_shots, model='') -> None:
@@ -73,3 +72,20 @@ def save_results(dataset: str, n_shots: List[int], results: npt.NDArray[int], ou
         os.makedirs(output_dir, exist_ok=True)
         output_path = f"{output_dir}/{dataset}_n_shots_results_{'_'.join([str(i) for i in n_shots])}.npy"
         np.save(output_path, results)
+
+
+def encode_labels(tokenizer: PreTrainedTokenizerBase, labels: List[str]) -> List[List[int]]:
+    if isinstance(tokenizer, LlamaTokenizer):
+        # sentence piece - adds a space at the beginning of the sentence
+        return [tokenizer.encode(f'{label.lstrip()}', add_special_tokens=False) for label in labels]
+
+    return [tokenizer.encode(f' {label.lstrip()}', add_special_tokens=False) for label in labels]
+
+
+def encode_stop_seq(tokenizer: PreTrainedTokenizerBase, stop_seq: str) -> int:
+    stop_seq_token_id = tokenizer.encode(stop_seq, add_special_tokens=False)
+    if isinstance(tokenizer, LlamaTokenizer):
+        assert len(stop_seq_token_id) == 2
+    else:
+        assert len(stop_seq_token_id) == 1
+    return stop_seq_token_id[-1]

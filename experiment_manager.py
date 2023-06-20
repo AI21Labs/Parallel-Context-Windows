@@ -9,8 +9,9 @@ from tqdm import tqdm
 
 from constants import TEXT_BETWEEN_SHOTS, N_TOKENS, PROMPTS
 from datasets_loader import LABEL_TOKENS
-from modeling_gpt2_with_pcw import GPT2LMHeadWithPCWModel, RestrictiveTokensLogitsProcessor
-from utils import n_tokens_in_prompt
+from pcw_wrapper import PCWModelWrapper
+from logits_processor import RestrictiveTokensLogitsProcessor
+from utils import n_tokens_in_prompt, encode_labels, encode_stop_seq
 
 _logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(message)s')
@@ -19,7 +20,7 @@ STOP_SEQUENCE = '\n'
 
 
 class ExperimentManager:
-    def __init__(self, test_df: pd.DataFrame, train_df: pd.DataFrame, model: GPT2LMHeadWithPCWModel,
+    def __init__(self, test_df: pd.DataFrame, train_df: pd.DataFrame, model: PCWModelWrapper,
                  labels: List[str] = None, random_seed: int = 42, subsample_test_set: int = 250,
                  n_shots_per_window: int = None):
         if subsample_test_set < len(test_df):
@@ -35,8 +36,7 @@ class ExperimentManager:
 
     def _initialize_labels_and_logit_processor(self, labels: List[str]) -> None:
         _logger.info(f"Provided labels: {labels}")
-        labels_tokens = [self.tokenizer.encode(f' {label.lstrip()}', add_special_tokens=False) for label in labels]
-
+        labels_tokens = encode_labels(self.tokenizer, labels)
         labels_tokens_array = self.minimize_labels_tokens(labels_tokens)
         _logger.info(f"Provided labels average n_tokens: {np.round(np.mean([len(lt) for lt in labels_tokens]), 3)}")
         # we fix the labels accordingly in the test set:
@@ -54,6 +54,7 @@ class ExperimentManager:
         labels_tokens_array = self.pad_contained_labels_with_stop_seq(shorten_label_tokens, labels_tokens_array)
         self.logit_processor = RestrictiveTokensLogitsProcessor(restrictive_token_ids=labels_tokens_array,
                                                                 eos_token_id=self.tokenizer.eos_token_id)
+        self.possible_labels = set(map_labels.values())
 
     def minimize_labels_tokens(self, labels_tokens: List[List[int]]) -> npt.NDArray[int]:
         """
@@ -76,9 +77,7 @@ class ExperimentManager:
         In case we have two labels, where one label contains the other label (for example: "A" and "A B") we need
         to allow the restrictive decoding to produce the output "A". We support it by adding "\n" to the shorter label.
         """
-        stop_seq_token_id = self.tokenizer.encode(STOP_SEQUENCE, add_special_tokens=False)
-        assert len(stop_seq_token_id) == 1
-        stop_seq_token_id = stop_seq_token_id[0]
+        stop_seq_token_id = encode_stop_seq(self.tokenizer, STOP_SEQUENCE)
         for i, tokens in enumerate(labels_tokens):
             labels_with_shared_beginnings = np.sum(
                 np.all(labels_tokens_array[:, :len(tokens)] == np.array(tokens), axis=1))
@@ -102,6 +101,7 @@ class ExperimentManager:
         for q in self.test_df[PROMPTS]:
             predicted_label = self.predict_label(TEXT_BETWEEN_SHOTS + q, windows_cache)
             predicted_labels.append(predicted_label)
+        assert set(predicted_labels).issubset(self.possible_labels)
         return predicted_labels
 
     def predict_label(self, task_text: str, cache: Dict) -> str:
@@ -135,8 +135,8 @@ class ExperimentManager:
                 longest_window_n_tokens = max(n_tokens_in_prompt(self.tokenizer, window)
                                               for window in windows_few_shots)
                 n_tokens_between_shots = n_tokens_in_prompt(self.tokenizer, TEXT_BETWEEN_SHOTS)
-                if (longest_window_n_tokens + n_tokens_between_shots +
-                        self.test_df[N_TOKENS].max() + self.max_n_tokens) > self.model.context_window_size:
+                if (longest_window_n_tokens + n_tokens_between_shots + self.test_df[N_TOKENS].max()
+                        + self.max_n_tokens) > self.model.context_window_size:
                     _logger.warning("Drawn training shots were too long, trying again")
                     n_errors += 1
                     assert n_errors <= too_long_patience * n_runs, "too many long inputs were drawn!"
